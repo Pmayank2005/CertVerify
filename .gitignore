@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+yarn.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Hardhat
+cache/
+artifacts/
+typechain-types/
+
+# Build outputs
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.claude/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Data
+data/certificates.json
+data/certificates.db
+data/*.json
+data/qr/
+Certificate_Templates/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+test/
+
+# Temporary
+tmp/
+temp/
+
+#Deployment
+deployments/
+
+#Documents
+docs/

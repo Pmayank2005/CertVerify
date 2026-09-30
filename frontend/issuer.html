@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Issuer Portal — CertVerify</title>
+  <meta name="description" content="Authorized institutions issue and revoke SHA-256 fingerprinted certificates on the Ganache blockchain." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-icon">🛡️</span>
+        <span class="brand-text">Cert<span>Verify</span></span>
+      </a>
+      <nav class="links">
+        <a href="index.html">Overview</a>
+        <a href="issuer.html" class="active">Issuer Portal</a>
+        <a href="verifier.html">Verify</a>
+      </nav>
+      <div class="wallet-box">
+        <span id="walletStatus" class="network-tag">Not connected</span>
+        <span id="networkTag" class="network-tag" data-disconnected-label="Not connected">Not connected</span>
+        <span id="walletAddress" class="wallet-address" hidden></span>
+        <button id="connectBtn" data-connect-label="Connect MetaMask" class="btn btn-ghost" style="padding: 0.375rem 0.75rem; font-family: var(--font-mono); font-size: 0.75rem;">🔗 Connect MetaMask</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="banner" class="banner"></div>
+
+    <!-- Page Title -->
+    <div class="page-title">
+      <div class="kicker">Authorized issuer console</div>
+      <h1>Issuer Portal</h1>
+      <p class="subtitle">Credential data is canonicalized and hashed with SHA-256 in your browser, then broadcast to the Ganache blockchain via MetaMask.</p>
+    </div>
+
+    <section class="panel issuance-hub" aria-labelledby="issuanceHeading">
+      <div class="label label-primary" id="issuanceHeading">Issue certificate</div>
+      <fieldset class="issuance-mode-options">
+        <legend class="sr-only">Certificate issuance method</legend>
+        <button class="issuance-mode-button" type="button" data-issuance-mode="pdf" aria-pressed="false">
+          <span class="issuance-mode-index">01 / DOCUMENT</span>
+          <strong>Issue with PDF</strong>
+          <span>Register a finalized certificate document.</span>
+        </button>
+        <button class="issuance-mode-button" type="button" data-issuance-mode="raw" aria-pressed="false">
+          <span class="issuance-mode-index">02 / DATA</span>
+          <strong>Issue with Raw Data</strong>
+          <span>Build a certificate from structured information.</span>
+        </button>
+      </fieldset>
+      <section id="pdfIssuancePanel" class="issuance-mode-panel" aria-live="polite" hidden>
+        <h2>Issue with PDF</h2>
+        <div class="pdf-issue-layout">
+          <div>
+            <label for="pdfFileInput">Certificate PDF (maximum 10 MB)</label>
+            <input id="pdfFileInput" class="field" type="file" accept="application/pdf,.pdf" />
+            <p id="pdfFileDetails" class="dim" aria-live="polite">Choose a PDF to preview and hash its actual bytes.</p>
+            <iframe id="pdfPreview" class="pdf-preview" title="Uploaded certificate PDF preview" hidden></iframe>
+          </div>
+          <div>
+            <div class="pdf-metadata-grid">
+              <div><label for="pdfStudentName">Student name</label><input id="pdfStudentName" class="field" autocomplete="name" /></div>
+              <div><label for="pdfCourse">Course / certificate type</label><input id="pdfCourse" class="field" /></div>
+              <div><label for="pdfInstitution">Institution</label><input id="pdfInstitution" class="field" /></div>
+              <div><label for="pdfIssueDate">Issue / completion date</label><input id="pdfIssueDate" class="field" type="date" /></div>
+              <div><label for="pdfIssuerName">Issuer name</label><input id="pdfIssuerName" class="field" /></div>
+              <div><label for="pdfGrade">Grade (optional)</label><input id="pdfGrade" class="field" /></div>
+            </div>
+            <button id="preparePdfReviewBtn" class="btn btn-primary" type="button" disabled>Review PDF issuance</button>
+          </div>
+        </div>
+        <section id="pdfReview" class="issuance-review" hidden>
+          <h3>Review before blockchain issuance</h3>
+          <div id="pdfReviewSummary" class="kv"></div>
+          <label class="confirm-issuance"><input id="confirmPdfIssue" type="checkbox" /> I confirm this PDF and metadata should be registered on-chain.</label>
+          <button id="issuePdfBtn" class="btn btn-primary" type="button" disabled>Issue certificate</button>
+        </section>
+        <div id="pdfIssueResult" class="result" aria-live="polite"></div>
+      </section>
+      <section id="rawIssuancePanel" class="issuance-mode-panel" aria-live="polite" hidden>
+        <h2>Issue with Raw Data</h2>
+        <fieldset class="raw-mode-options">
+          <legend class="sr-only">Raw-data issuance size</legend>
+          <button type="button" class="raw-mode-button" data-raw-mode="single" aria-pressed="true">Single student</button>
+          <button type="button" class="raw-mode-button" data-raw-mode="bulk" aria-pressed="false">Multiple students · CSV</button>
+        </fieldset>
+        <p class="dim">Choose a design. Sample details shown below are replaced with your certificate details and a new verification QR in the generated PDF.</p>
+        <div id="defaultTemplateGallery" class="template-gallery" aria-label="Default certificate designs"></div>
+        <details class="template-designer">
+          <summary>Template designer</summary>
+          <div class="template-designer-grid">
+            <div><label for="customTemplateName">Saved template name</label><input id="customTemplateName" class="field" maxlength="48" placeholder="Institution certificate" /></div>
+            <div><label for="templateBackgroundInput">Image background (PNG/JPG, max 350 KB)</label><input id="templateBackgroundInput" class="field" type="file" accept="image/png,image/jpeg" /></div>
+            <div><label for="templateBackgroundOpacity">Background opacity</label><input id="templateBackgroundOpacity" type="range" min="30" max="100" value="82" /></div>
+            <div><label for="templateStudentX">Student name X position</label><input id="templateStudentX" type="range" min="20" max="80" value="50" /></div>
+            <div><label for="templateStudentY">Student name Y position</label><input id="templateStudentY" type="range" min="38" max="65" value="53" /></div>
+            <div><label for="templateStudentFont">Student name font size</label><input id="templateStudentFont" type="range" min="20" max="38" value="30" /></div>
+            <div><label for="templateCourseY">Course Y position</label><input id="templateCourseY" type="range" min="28" max="50" value="40" /></div>
+            <div><label for="templateIdX">Certificate ID X position</label><input id="templateIdX" type="range" min="65" max="90" value="82" /></div>
+            <div><label for="templateIdY">Certificate ID Y position</label><input id="templateIdY" type="range" min="12" max="24" value="18" /></div>
+            <div><label for="templateQrX">QR X position</label><input id="templateQrX" type="range" min="72" max="90" value="84" /></div>
+            <div><label for="templateQrY">QR Y position</label><input id="templateQrY" type="range" min="4" max="24" value="5" /></div>
+            <label class="template-signature-option"><input id="templateSignatureEnabled" type="checkbox" checked /> Include signature area</label>
+          </div>
+          <button id="saveCustomTemplateBtn" class="btn btn-ghost" type="button">Save custom template</button>
+          <button id="removeCustomTemplateBtn" class="btn btn-ghost" type="button">Remove selected custom template</button>
+          <p id="templateDesignerStatus" class="dim" aria-live="polite"></p>
+        </details>
+        <div id="singleStudentMode">
+          <div class="raw-certificate-form">
+            <div><label for="rawTemplateId">Certificate template</label><select id="rawTemplateId" class="field"></select></div>
+            <div><label for="rawCertificateTitle">Certificate title</label><input id="rawCertificateTitle" class="field" value="Certificate of Achievement" /></div>
+            <div><label for="rawStudentName">Student name</label><input id="rawStudentName" class="field" /></div>
+            <div><label for="rawCourse">Course / achievement</label><input id="rawCourse" class="field" /></div>
+            <div><label for="rawInstitution">Institution</label><input id="rawInstitution" class="field" /></div>
+            <div><label for="rawIssueDate">Issue / completion date</label><input id="rawIssueDate" class="field" type="date" /></div>
+            <div><label for="rawIssuerName">Issuer name (optional)</label><input id="rawIssuerName" class="field" placeholder="e.g. Dr. Sharma" /></div>
+            <div><label for="rawGrade">Grade (optional)</label><input id="rawGrade" class="field" /></div>
+          </div>
+          <button id="generateRawPreviewBtn" class="btn btn-primary" type="button">Generate certificate preview</button>
+          <iframe id="rawCertificatePreview" class="pdf-preview" title="Generated certificate preview" hidden></iframe>
+          <section id="rawReview" class="issuance-review" hidden>
+            <h3>Review final certificate</h3>
+            <div id="rawReviewSummary"></div>
+            <label class="confirm-issuance"><input id="confirmRawIssue" type="checkbox" /> I approve the final PDF, embedded QR, and certificate details.</label>
+            <button id="issueRawBtn" class="btn btn-primary" type="button" disabled>Issue certificate</button>
+          </section>
+          <div id="rawIssueResult" class="result" aria-live="polite"></div>
+        </div>
+        <div id="bulkStudentsMode" hidden>
+          <div class="bulk-import-controls">
+            <div>
+              <label for="bulkCsvInput">Student CSV (up to 50 rows)</label>
+              <input id="bulkCsvInput" class="field" type="file" accept=".csv,text/csv" />
+            </div>
+            <div><label for="bulkTemplateId">Certificate template</label><select id="bulkTemplateId" class="field"></select></div>
+          </div>
+          <div id="bulkColumnMapping" class="bulk-column-mapping" hidden>
+            <h3>Map uploaded columns</h3>
+            <div id="bulkMappingFields" class="bulk-mapping-grid"></div>
+            <button id="validateBulkRowsBtn" class="btn btn-primary" type="button">Validate rows</button>
+          </div>
+          <div id="bulkValidationSummary" class="bulk-validation-summary" aria-live="polite"></div>
+          <div id="bulkRowReport" class="bulk-row-report"></div>
+          <button id="generateBulkCertificatesBtn" class="btn btn-primary" type="button" disabled>Generate valid certificates</button>
+          <iframe id="bulkCertificatePreview" class="pdf-preview" title="Generated bulk certificate preview" hidden></iframe>
+          <div id="bulkGeneratedSummary" class="bulk-generated-summary"></div>
+          <div class="bulk-issue-controls">
+            <button id="downloadBulkZipBtn" class="btn btn-ghost" type="button" disabled>Download generated PDFs (ZIP)</button>
+            <label class="confirm-issuance"><input id="confirmBulkIssue" type="checkbox" disabled /> I confirm issue of every generated valid certificate.</label>
+            <button id="issueBulkBtn" class="btn btn-primary" type="button" disabled>Issue generated certificates</button>
+          </div>
+          <div id="bulkIssueResult" class="result" aria-live="polite"></div>
+        </div>
+      </section>
+    </section>
+
+    <div class="grid-layout issuer-secondary">
+      <div>
+        <details id="developerTools" class="panel developer-tools">
+          <summary>Advanced certificate operations</summary>
+          <div class="developer-tool-section">
+            <div class="label label-primary" style="margin-bottom: 0.75rem;">Direct hash registration</div>
+            <div style="display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+              <div>
+                <label for="certHash">Certificate SHA-256 hash</label>
+                <input type="text" id="certHash" class="field" placeholder="0x1234abcd…" style="margin-top: 0.25rem;" />
+              </div>
+            </div>
+
+            <label for="certMetadata">Metadata (JSON string)</label>
+            <textarea id="certMetadata" class="field" style="margin-top: 0.25rem;" placeholder='{"student":"Alice Kumar","course":"B.Tech Computer Science","grade":"A"}'></textarea>
+
+            <div style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
+              <button id="issueBtn" class="btn btn-primary">📤 Register hash on blockchain</button>
+              <button id="prefillBtn" class="btn btn-ghost" title="Generate a random hash and prefill example metadata">⚡ Generate Example</button>
+            </div>
+            <div id="issueResult" class="result"></div>
+          </div>
+
+        </details>
+      </div>
+
+      <div>
+        <details class="panel technical-details">
+          <summary>Contract status and issuer authorization</summary>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div>
+              <div class="label">Contract</div>
+              <div style="font-size: 0.875rem; font-weight: 600; margin-top: 0.125rem;">CertificateRegistry</div>
+            </div>
+            <div>
+              <div class="label">Total issued</div>
+              <div style="font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; margin-top: 0.125rem;" id="totalCount">—</div>
+            </div>
+            <div style="grid-column: span 2;">
+              <div class="label">Address</div>
+              <div class="hash" style="margin-top: 0.125rem;" id="contractAddress">loading…</div>
+            </div>
+            <div style="grid-column: span 2;">
+              <div class="label">Authorized issuer</div>
+              <div class="hash" style="margin-top: 0.125rem;" id="issuerAddress">connect wallet to load</div>
+            </div>
+            <div style="grid-column: span 2;">
+              <div class="label">Your role</div>
+              <div style="margin-top: 0.25rem;" id="roleBadge">—</div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <section class="panel certificate-management" aria-labelledby="issuedCertificatesHeading">
+      <div class="certificate-management-heading">
+        <div>
+          <div class="label label-primary">Issuer records</div>
+          <h2 id="issuedCertificatesHeading">Issued certificates</h2>
+        </div>
+        <button id="refreshCertificatesBtn" class="btn btn-ghost" type="button">Refresh</button>
+      </div>
+      <div class="certificate-management-controls">
+        <label class="sr-only" for="certificateSearch">Search certificate ID or student</label>
+        <input id="certificateSearch" class="field" type="search" placeholder="Search ID or student name" />
+        <fieldset class="certificate-status-filters">
+          <legend class="sr-only">Certificate status filter</legend>
+          <button type="button" data-certificate-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-certificate-filter="valid" aria-pressed="false">Valid</button>
+          <button type="button" data-certificate-filter="revoked" aria-pressed="false">Revoked</button>
+        </fieldset>
+      </div>
+      <p id="certificateManagementSummary" class="dim" aria-live="polite">Loading issued certificates…</p>
+      <div class="issued-certificates-scroll">
+        <table class="issued-certificates-table">
+          <thead><tr><th>Certificate ID</th><th>Student</th><th>Course / type</th><th>Issue date</th><th>Status</th><th>Transaction</th><th>Actions</th></tr></thead>
+          <tbody id="issuedCertificatesBody"></tbody>
+        </table>
+      </div>
+      <p id="certificateListEmpty" class="dim" hidden>No certificates match this search and filter.</p>
+      <section id="certificateDetails" class="certificate-details" hidden>
+        <div class="certificate-management-heading">
+          <h3 id="certificateDetailsTitle">Certificate details</h3>
+          <button id="closeCertificateDetails" class="btn btn-ghost" type="button" aria-label="Close certificate details">Close</button>
+        </div>
+        <div id="certificateDetailsContent"></div>
+        <div class="certificate-detail-actions">
+          <img id="certificateDetailsQr" class="issued-qr-image" alt="Certificate verification QR code" />
+          <a id="certificateDetailsVerify" class="btn btn-ghost" target="_blank" rel="noopener">Verify</a>
+          <button id="certificateDetailsDownload" class="btn btn-ghost" type="button">Download</button>
+          <button id="certificateDetailsRevoke" class="btn btn-danger" type="button">Revoke certificate</button>
+        </div>
+        <p id="certificateDetailsMessage" class="dim" aria-live="polite"></p>
+      </section>
+    </section>
+
+    <dialog id="revokeConfirmDialog" class="revoke-dialog">
+      <form method="dialog">
+        <h2>Revoke certificate?</h2>
+        <p id="revokeConfirmationText">This action is irreversible. The blockchain will remain the source of truth.</p>
+        <div class="revoke-dialog-actions">
+          <button id="cancelRevokeBtn" class="btn btn-ghost" type="button">Cancel</button>
+          <button id="confirmRevokeBtn" class="btn btn-danger" type="button">Confirm revocation</button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+
+  <footer class="site-footer">
+    CertVerify · SHA-256 · Ganache Local · Solidity 0.8.20
+  </footer>
+
+  <!-- Vendor libs and app code (order matters) -->
+  <script src="vendor/ethers.umd.min.js"></script>
+  <script src="vendor/qrcode.min.js"></script>
+  <script src="vendor/pdf-lib.min.js"></script>
+  <script src="vendor/jszip.min.js"></script>
+  <script src="config.js"></script>
+  <script src="abi.js"></script>
+  <script src="wallet-session.js"></script>
+  <script src="app.js"></script>
+  <script src="certificate-workflows.js"></script>
+  <script src="issuer.js"></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+  "name": "certverify",
+  "version": "1.0.0",
+  "description": "CertVerify blockchain certificate issuance and verification",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "compile": "hardhat compile",
+    "check": "node scripts/check-project.js",
+    "deploy": "hardhat run scripts/deploy.js --network ganache",
+    "test": "hardhat test",
+    "test:ganache": "hardhat test --network ganache",
+    "accounts": "hardhat accounts --network ganache",
+    "node": "hardhat node",
+    "dev": "node scripts/serve-frontend.js",
+    "clean": "hardhat clean",
+    "verify": "hardhat run scripts/test-connection.js --network ganache",
+    "issue": "hardhat run scripts/issue-certificate.js --network ganache",
+    "qr": "node scripts/generate-qr.js",
+    "templates:preview": "node scripts/preview-templates.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@nomiclabs/hardhat-waffle": "^2.0.6",
+    "chai": "^4.5.0",
+    "dotenv": "^18.0.2",
+    "ethereum-waffle": "^4.0.10",
+    "ethers": "^5.8.0",
+    "hardhat": "^2.26.3",
+    "hardhat-gas-reporter": "^2.3.0"
+  },
+  "dependencies": {
+    "jsqr": "^1.4.0",
+    "jszip": "^3.10.2",
+    "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4"
+  }
+}
