@@ -1,3 +1,30 @@
+/** Route-scoped certificate workflows used by the Angular verifier component. */
+function renderIntegrityBadge(status, label, integrity) {
+  let integrityBadge = "";
+  if (integrity.document) {
+    let details = "Displayed metadata is not independently verified.";
+    if (integrity.tampered) details = "Warning: displayed metadata differs from its on-chain anchor.";
+    else if (integrity.metadataVerified) details = "Certificate metadata matches its on-chain anchor.";
+    const documentMessage = integrity.pdfUploaded && status !== 0
+      ? "Uploaded PDF bytes match the registered hash."
+      : "Upload the original PDF to verify its bytes.";
+    integrityBadge = `<div class="integrity-badge${integrity.tampered ? " tampered" : ""}">${documentMessage} ${details}</div>`;
+  } else if (integrity.verified) {
+    integrityBadge = '<div class="integrity-badge verified">🛡️ Cryptographic Integrity Verified — Data Matches On-Chain Anchor</div>';
+  } else if (integrity.tampered) {
+    integrityBadge = '<div class="integrity-badge tampered">⚠️ Tampering Detected — Off-Chain Data Differs from On-Chain Hash!</div>';
+  } else if (status === 1) {
+    integrityBadge = '<div class="integrity-badge" style="background:rgba(99,102,241,0.15); color:#a5b4fc; border:1px solid rgba(99,102,241,0.4);">⛓️ Verified on Blockchain</div>';
+  }
+
+  return `<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+    <div><span class="badge ${label.css}">${label.text}</span>${integrityBadge}</div>
+  </div>`;
+}
+
+function createVerifierController(client, scope, libraries) {
+const { state, createReadonlyContract, toBytes32, statusLabel, formatTimestamp, shorten, errorMessage, parseMetadata, escapeHtml, showBanner, hideBanner, updateTopbar, computeCertificateHash, getVerificationUrl, renderQrCode, fetchOffchainCertificates, fetchOffchainCertificate, decodeQrFromImage, extractHashFromQr } = client;
+const { ethers, CertificateWorkflows } = libraries;
 /**
  * Public verification page logic (Phase 3)
  *
@@ -8,10 +35,14 @@
  * - Dual verification: on-chain smart contract + off-chain data integrity check
  * - Interactive QR code generation & diploma presentation
  *
- * Loaded by verifier.html after app.js.
+ * Instantiated by CertificateWorkflowService after Angular renders the page.
  */
 
-const $ = (id) => document.getElementById(id);
+const $ = scope.get;
+
+function reportAsyncError(error) {
+  showBanner(errorMessage(error));
+}
 
 async function getVerificationHash(rawInput, resultEl) {
   if (!rawInput) {
@@ -54,25 +85,6 @@ function inspectOffchainIntegrity(hash, offchainRecord, onchainMetadata = {}) {
     console.warn("Could not re-hash off-chain data:", err);
     return { verified: false, tampered: false };
   }
-}
-
-function renderIntegrityBadge(status, label, integrity) {
-  let integrityBadge = "";
-  if (integrity.document) {
-    const details = integrity.tampered ? "Warning: displayed metadata differs from its on-chain anchor." : integrity.metadataVerified ? "Certificate metadata matches its on-chain anchor." : "Displayed metadata is not independently verified.";
-    const documentMessage = integrity.pdfUploaded && status !== 0 ? "Uploaded PDF bytes match the registered hash." : "Upload the original PDF to verify its bytes.";
-    integrityBadge = `<div class="integrity-badge${integrity.tampered ? " tampered" : ""}">${documentMessage} ${details}</div>`;
-  } else if (integrity.verified) {
-    integrityBadge = '<div class="integrity-badge verified">🛡️ Cryptographic Integrity Verified — Data Matches On-Chain Anchor</div>';
-  } else if (integrity.tampered) {
-    integrityBadge = '<div class="integrity-badge tampered">⚠️ Tampering Detected — Off-Chain Data Differs from On-Chain Hash!</div>';
-  } else if (status === 1) {
-    integrityBadge = '<div class="integrity-badge" style="background:rgba(99,102,241,0.15); color:#a5b4fc; border:1px solid rgba(99,102,241,0.4);">⛓️ Verified on Blockchain</div>';
-  }
-
-  return `<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
-    <div><span class="badge ${label.css}">${label.text}</span>${integrityBadge}</div>
-  </div>`;
 }
 
 function renderCertificateDiploma(status, displayData, cert, hash, offchainRecord) {
@@ -153,7 +165,7 @@ async function setupVerificationQr(hash) {
     try {
       await navigator.clipboard.writeText(verifyUrl);
       event.target.textContent = "✓ Link Copied!";
-      setTimeout(() => { event.target.textContent = "📋 Copy Verification Link"; }, 2000);
+      scope.setTimeout(() => { event.target.textContent = "📋 Copy Verification Link"; }, 2000);
     } catch (err) {
       // Clipboard permission may be unavailable; keep the verification URL accessible.
       console.warn("[verifier] Could not copy verification link:", err);
@@ -162,7 +174,7 @@ async function setupVerificationQr(hash) {
   });
 }
 
-async function verifyCertificate(hashToVerify, pdfUploaded = false) {
+async function verifyCertificate(hashToVerify = "", pdfUploaded = false) {
   const resultEl = $("verifyResult");
   const btn = $("verifyBtn");
   const placeholder = $("verifyPlaceholder");
@@ -225,7 +237,7 @@ async function handleQrImageFile(file) {
     return;
   }
 
-  const dropzone = $("qrDropzone");
+  const dropzone = $("qrDropzoneStatus");
   const origText = dropzone.innerHTML;
   dropzone.innerHTML = '<span class="spinner"></span> Scanning QR code from image…';
 
@@ -238,13 +250,13 @@ async function handleQrImageFile(file) {
     }
 
     dropzone.innerHTML = `<span style="color:var(--success);">✓ QR Code Scanned Successfully</span>`;
-    setTimeout(() => { dropzone.innerHTML = origText; }, 2500);
+    scope.setTimeout(() => { dropzone.innerHTML = origText; }, 2500);
 
     $("verifyHash").value = extractedHash;
     await verifyCertificate(extractedHash);
   } catch (err) {
     dropzone.innerHTML = `<span style="color:var(--danger);">✗ ${escapeHtml(err.message)}</span>`;
-    setTimeout(() => { dropzone.innerHTML = origText; }, 3500);
+    scope.setTimeout(() => { dropzone.innerHTML = origText; }, 3500);
   }
 }
 
@@ -259,7 +271,7 @@ function setupQrScanner() {
   fileInput.addEventListener("change", (e) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      handleQrImageFile(selectedFile);
+      handleQrImageFile(selectedFile).catch(reportAsyncError);
     }
   });
 
@@ -277,18 +289,18 @@ function setupQrScanner() {
     dropzone.classList.remove("dragover");
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile) {
-      handleQrImageFile(droppedFile);
+      handleQrImageFile(droppedFile).catch(reportAsyncError);
     }
   });
 
   // Support paste from clipboard (Ctrl+V)
-  window.addEventListener("paste", (e) => {
+  scope.listen(window, "paste", (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of items) {
       if (!item.type.startsWith("image/")) continue;
       const file = item.getAsFile();
-      if (file) handleQrImageFile(file);
+      if (file) handleQrImageFile(file).catch(reportAsyncError);
       break;
     }
   });
@@ -312,21 +324,15 @@ function onAccountChanged() {
 // Init
 // ---------------------------------------------------------------------------
 
-window.addEventListener("DOMContentLoaded", async () => {
-  await CONFIG.loadDeployment();
-  await initWalletSession();
-  setupTopbar();
+
+async function initialize() {
   setupQrScanner();
   createReadonlyContract();
   $("verifyPdfInput").addEventListener("change", (event) => {
-    verifyUploadedPdf(event.target.files?.[0]);
+    verifyUploadedPdf(event.target.files?.[0]).catch(reportAsyncError);
   });
 
-  $("verifyBtn").addEventListener("click", () => verifyCertificate());
-  $("clearBtn").addEventListener("click", clearForm);
-  $("verifyHash").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") verifyCertificate();
-  });
+
 
   // Check URL query parameters for auto-verification (?hash=0x...)
   const params = new URLSearchParams(window.location.search);
@@ -335,4 +341,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     $("verifyHash").value = lookupParam.trim();
     await verifyCertificate(lookupParam.trim());
   }
-});
+}
+return { initialize, getVerificationHash, inspectOffchainIntegrity, renderIntegrityBadge, renderCertificateDiploma, buildVerificationMarkup, setupVerificationQr, verifyCertificate, verifyUploadedPdf, handleQrImageFile, setupQrScanner, clearForm, onAccountChanged };
+}
+module.exports = { createVerifierController };

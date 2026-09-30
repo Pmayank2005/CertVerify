@@ -60,3 +60,8 @@ deployments/
 
 #Documents
 docs/
+# Angular and browser tests
+.angular/
+out-tsc/
+playwright-report/
+test-results/

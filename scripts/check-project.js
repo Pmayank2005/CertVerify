@@ -20,12 +20,12 @@ for (const file of ["hardhat.config.js"]) {
   if (result.status !== 0) throw new Error(result.stderr || `Syntax check failed: ${file}`);
   total += 1;
 }
-for (const file of ["index.html", "issuer.html", "verifier.html"]) {
+for (const file of ["index.html", "src/app/app.component.html", "src/app/pages/overview.component.html", "src/app/pages/issuer.component.html", "src/app/pages/verifier.component.html"]) {
   const source = fs.readFileSync(path.join("frontend", file), "utf8");
   const ids = [...source.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
   if (new Set(ids).size !== ids.length) throw new Error(`Duplicate HTML IDs: ${file}`);
   for (const [, asset] of source.matchAll(/(?:src|href)="([^"?#]+)(?:[?#][^"]*)?"/g)) {
-    if (/^(https?:|data:|#)/.test(asset)) continue;
+    if (/^(https?:|data:|#|\/)/.test(asset)) continue;
     if (!fs.existsSync(path.join("frontend", asset))) throw new Error(`Missing local asset: ${asset}`);
   }
 }

@@ -15,8 +15,8 @@
  *   BASE_URL=http://myinstitution.edu node scripts/generate-qr.js
  */
 
-const path = require("path");
-const fs = require("fs");
+const path = require("node:path");
+const fs = require("node:fs");
 const { generateVerificationUrl, saveQrImage } = require("./lib/qr");
 const store = require("./lib/store");
 
@@ -61,8 +61,7 @@ async function main() {
   console.log(`Output directory: ${outputDir}`);
   console.log(`Base URL:         ${baseUrl}\n`);
 
-  for (let i = 0; i < hashes.length; i++) {
-    const hash = hashes[i];
+  await Promise.all(hashes.map(async (hash, index) => {
     const cert = certificates[hash];
     const student = cert.data?.studentName || "Unknown Student";
     const course = cert.data?.course || "Unknown Course";
@@ -74,11 +73,11 @@ async function main() {
 
     await saveQrImage(verifyUrl, outputPath, { width: 400 });
 
-    console.log(`[${i + 1}/${hashes.length}] ${student} (${course})`);
+    console.log(`[${index + 1}/${hashes.length}] ${student} (${course})`);
     console.log(`    Hash: ${hash}`);
     console.log(`    URL:  ${verifyUrl}`);
     console.log(`    File: data/qr/${fileName}\n`);
-  }
+  }));
 
   console.log(`✓ All ${hashes.length} QR codes generated successfully in data/qr/`);
 }

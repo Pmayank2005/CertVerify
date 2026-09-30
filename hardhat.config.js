@@ -4,7 +4,8 @@ require("hardhat-gas-reporter");
 require("dotenv").config();
 
 task("accounts", "Prints accounts on the selected network", async (_, { ethers }) => {
-  for (const signer of await ethers.getSigners()) console.log(await signer.getAddress());
+  const addresses = await Promise.all((await ethers.getSigners()).map((signer) => signer.getAddress()));
+  for (const address of addresses) console.log(address);
 });
 
 const GANACHE_RPC_URL = process.env.GANACHE_RPC_URL || "http://127.0.0.1:8545";

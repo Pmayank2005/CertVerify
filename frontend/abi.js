@@ -22,3 +22,5 @@ const CERTIFICATE_REGISTRY_ABI = [
   "function issuer() view returns (address)",
   "function revokeCertificate(bytes32 _hash)",
 ];
+
+module.exports = CERTIFICATE_REGISTRY_ABI;

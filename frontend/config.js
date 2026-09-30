@@ -27,6 +27,8 @@ const CONFIG = {
   // Route (served by scripts/serve-frontend.js) used to auto-refresh the
   // contract address from the latest deployment record
   DEPLOYMENT_FILE: "/deployments/CertificateRegistry-ganache.json",
+
+  loadDeployment: async () => {},
 };
 
 /**
@@ -53,3 +55,5 @@ CONFIG.loadDeployment = async function () {
     console.warn("[config] Could not load deployment info:", err.message);
   }
 };
+
+module.exports = CONFIG;

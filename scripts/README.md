@@ -8,7 +8,8 @@ Run commands from the project root. See the [setup guide](../README.md#quick-sta
 | `init-data.js` | `node scripts/init-data.js` | Create storage and deployment directories; preserve an existing store |
 | `test-connection.js` | `npm run verify` | Check Ganache, chain ID, signer, and balance |
 | `deploy.js` | `npm run deploy` | Deploy a registry with the signer as issuer; write a deployment JSON |
-| `serve-frontend.js` | `npm run dev` | Serve the frontend and local storage API on port 8080 |
+| `dev-angular.js` | `npm run dev` | Build/watch Angular and start the local server on port 8080; refresh the browser after rebuilding |
+| `serve-frontend.js` | `npm start` | Build production Angular assets and serve them with the local storage API |
 | `issue-certificate.js` | `npm run issue` | Issue sample canonical-JSON certificates, or use JSON from the `CERT_DATA` environment variable |
 | `generate-qr.js` | `npm run qr` | Generate verification QR images under `data/qr/`; optional `BASE_URL` environment variable |
 | `preview-templates.js` | `npm run templates:preview` | Write preview PDFs under `docs/template-previews/` without issuing transactions |

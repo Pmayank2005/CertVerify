@@ -1,0 +1,62 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "projects",
+  "cli": {
+    "analytics": false
+  },
+  "projects": {
+    "certverify": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "frontend/src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": "dist/certverify",
+            "index": "frontend/index.html",
+            "browser": "frontend/src/main.ts",
+            "tsConfig": "tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "frontend/templates",
+                "output": "templates"
+              }
+            ],
+            "styles": [
+              "frontend/styles.css"
+            ],
+            "allowedCommonJsDependencies": [
+              "ethers",
+              "qrcode",
+              "jsqr",
+              "jszip",
+              "pdf-lib"
+            ]
+          },
+          "configurations": {
+            "production": {
+              "optimization": { "scripts": true, "styles": true, "fonts": false },
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "2MB",
+                  "maximumError": "3MB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        }
+      }
+    }
+  }
+}

@@ -13,17 +13,27 @@
     "test:ganache": "hardhat test --network ganache",
     "accounts": "hardhat accounts --network ganache",
     "node": "hardhat node",
-    "dev": "node scripts/serve-frontend.js",
+    "dev": "node scripts/dev-angular.js",
     "clean": "hardhat clean",
     "verify": "hardhat run scripts/test-connection.js --network ganache",
     "issue": "hardhat run scripts/issue-certificate.js --network ganache",
     "qr": "node scripts/generate-qr.js",
-    "templates:preview": "node scripts/preview-templates.js"
+    "templates:preview": "node scripts/preview-templates.js",
+    "build": "ng build",
+    "build:watch": "ng build --watch --configuration development",
+    "start": "npm run build && node scripts/serve-frontend.js",
+    "test:ui": "npm run build && playwright test",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p jsconfig.json --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "browser": {
+    "node:crypto": false,
+    "node:fs/promises": false,
+    "node:path": false
+  },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.2.3",
     "@nomiclabs/hardhat-waffle": "^2.0.6",
@@ -32,12 +42,24 @@
     "ethereum-waffle": "^4.0.10",
     "ethers": "^5.8.0",
     "hardhat": "^2.26.3",
-    "hardhat-gas-reporter": "^2.3.0"
+    "hardhat-gas-reporter": "^2.3.0",
+    "@angular/build": "21.2.24",
+    "@angular/cli": "21.2.24",
+    "@angular/compiler-cli": "21.2.24",
+    "typescript": "~5.9.3",
+    "@playwright/test": "^1.58.2"
   },
   "dependencies": {
     "jsqr": "^1.4.0",
     "jszip": "^3.10.2",
     "pdf-lib": "^1.17.1",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "@angular/common": "21.2.24",
+    "@angular/compiler": "21.2.24",
+    "@angular/core": "21.2.24",
+    "@angular/platform-browser": "21.2.24",
+    "@angular/router": "21.2.24",
+    "rxjs": "~7.8.2",
+    "tslib": "^2.8.1"
   }
 }

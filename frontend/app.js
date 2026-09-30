@@ -1,16 +1,7 @@
-/**
- * Shared frontend helpers — wallet connection, contract setup, utilities.
- * Loaded by issuer.html and verifier.html.
- *
- * Required globals (loaded before this file):
- *   - vendor/ethers.umd.min.js  -> window.ethers (v5)
- *   - config.js                 -> CONFIG
- *   - abi.js                    -> CERTIFICATE_REGISTRY_ABI
- */
-
-// ---------------------------------------------------------------------------
-// Global state
-// ---------------------------------------------------------------------------
+/** Shared certificate client, owned by Angular's singleton WalletService. */
+/** @returns {any} JavaScript workflow API consumed by the typed Angular services. */
+function createCertificateClient({ ethers, CONFIG, CERTIFICATE_REGISTRY_ABI, createWalletSessionManager, QRCode, jsQR, onWalletState = (_state) => {}, onError = (_message) => {} }) {
+const hooks = {};
 const state = {
   provider: null,        // ethers Web3Provider (MetaMask)
   signer: null,          // ethers signer (connected account)
@@ -36,12 +27,12 @@ async function connectWallet() {
   state.walletReady = false;
   try {
     const address = await walletSession.connectWallet();
-    if (address && typeof onWalletConnected === "function") {
+    if (address && typeof hooks.onWalletConnected === "function") {
       await ensureCorrectNetwork();
     }
     state.walletReady = wasReady;
-    if (address && wasReady && typeof onWalletConnected === "function") {
-      await onWalletConnected();
+    if (address && wasReady && typeof hooks.onWalletConnected === "function") {
+      await hooks.onWalletConnected();
     }
     return address;
   } catch (err) {
@@ -79,10 +70,10 @@ function syncWalletState(walletState) {
   if (!accountChanged && !connectedChainChanged) return;
 
   let hook = null;
-  if (state.account && !previousAddress && typeof onWalletConnected === "function") {
-    hook = onWalletConnected;
-  } else if (typeof onAccountChanged === "function") {
-    hook = onAccountChanged;
+  if (state.account && !previousAddress && typeof hooks.onWalletConnected === "function") {
+    hook = hooks.onWalletConnected;
+  } else if (typeof hooks.onAccountChanged === "function") {
+    hook = hooks.onAccountChanged;
   }
   if (typeof hook === "function") {
     Promise.resolve(hook()).catch((err) => console.warn("[app] Wallet state refresh failed:", errorMessage(err)));
@@ -93,7 +84,7 @@ function createWalletSession() {
   if (state.walletSession) return state.walletSession;
   state.walletSession = createWalletSessionManager({
     ethereum: window.ethereum,
-    ethers: window.ethers,
+    ethers,
     networkName: CONFIG.NETWORK_NAME,
     expectedChainId: CONFIG.CHAIN_ID,
     onStateChange: syncWalletState,
@@ -174,7 +165,7 @@ function getContract() {
  * @param {string} hexStr
  * @returns {string} bytes32 hex string
  */
-function toBytes32(hexStr) {
+function toBytes32(hexStr) { // NOSONAR -- These utilities are intentionally scoped to the client instance API.
   let hex = hexStr.trim();
   if (hex.startsWith("0x") || hex.startsWith("0X")) hex = hex.slice(2);
   if (!/^[0-9a-fA-F]*$/.test(hex)) {
@@ -188,7 +179,7 @@ function toBytes32(hexStr) {
 }
 
 /** Maps contract status codes to a readable label. */
-function statusLabel(statusCode) {
+function statusLabel(statusCode) { // NOSONAR -- Keep public client helpers out of the global/module namespace.
   switch (Number(statusCode)) {
     case 0: return { text: "Not Found", css: "status-notfound" };
     case 1: return { text: "Valid", css: "status-valid" };
@@ -198,14 +189,14 @@ function statusLabel(statusCode) {
 }
 
 /** Formats a unix timestamp (seconds) as a local date-time string. */
-function formatTimestamp(seconds) {
+function formatTimestamp(seconds) { // NOSONAR -- Keep public client helpers out of the global/module namespace.
   const n = Number(seconds);
   if (!n) return "—";
   return new Date(n * 1000).toLocaleString();
 }
 
 /** Shortens an address/hash for display, e.g. 0x1234…abcd */
-function shorten(value, start = 6, end = 4) {
+function shorten(value, start = 6, end = 4) { // NOSONAR -- Keep public client helpers out of the global/module namespace.
   if (!value) return "—";
   const s = String(value);
   if (s.length <= start + end + 2) return s;
@@ -213,7 +204,7 @@ function shorten(value, start = 6, end = 4) {
 }
 
 /** Extracts a human-readable message from an ethers/Ganache error. */
-function errorMessage(err) {
+function errorMessage(err) { // NOSONAR -- Keep public client helpers out of the global/module namespace.
   if (!err) return "Unknown error";
   return (
     err.error?.message ||
@@ -225,7 +216,7 @@ function errorMessage(err) {
 }
 
 /** Minimal metadata field extraction from the JSON stored on-chain. */
-function parseMetadata(metadataJson) {
+function parseMetadata(metadataJson) { // NOSONAR -- Keep public client helpers out of the global/module namespace.
   try {
     const metadata = JSON.parse(metadataJson);
     return metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : { raw: metadataJson };
@@ -235,7 +226,7 @@ function parseMetadata(metadataJson) {
 }
 
 /** Escapes HTML special characters to prevent injection from metadata strings. */
-function escapeHtml(text) {
+function escapeHtml(text) { // NOSONAR -- Keep public client helpers out of the global/module namespace.
   return String(text ?? "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[character]);
@@ -249,7 +240,7 @@ function escapeHtml(text) {
 function showBanner(message) {
   const el = document.getElementById("banner");
   if (!el) {
-    alert(message);
+    onError(message);
     return;
   }
   el.textContent = message;
@@ -257,95 +248,11 @@ function showBanner(message) {
 }
 
 /** Hides the page banner. */
-function hideBanner() {
+function hideBanner() { // NOSONAR -- Banner access belongs to this client instance.
   document.getElementById("banner")?.classList.remove("show");
 }
 
-/** Refreshes the wallet address pill and network tag in the topbar. */
-function renderWalletAddress(address, isConnected) {
-  const addrEl = document.getElementById("walletAddress");
-  if (!addrEl) return;
-  addrEl.hidden = !(isConnected && address);
-  if (isConnected && address) addrEl.textContent = shorten(address);
-}
-
-function renderWalletStatus(isConnected) {
-  const statusEl = document.getElementById("walletStatus");
-  if (!statusEl) return;
-  statusEl.textContent = isConnected ? "Connected" : "Not connected";
-  statusEl.className = isConnected ? "network-tag ok" : "network-tag";
-}
-
-function renderNetworkStatus(chainId, isConnected) {
-  const netEl = document.getElementById("networkTag");
-  if (!netEl) return;
-  if (chainId === null || chainId === undefined) {
-    netEl.textContent = isConnected
-      ? "Network unavailable"
-      : (netEl.dataset.disconnectedLabel || "Not connected");
-    netEl.className = "network-tag";
-    return;
-  }
-
-  const networkMatches = Number(chainId) === Number(CONFIG.CHAIN_ID);
-  const networkLabel = networkMatches
-    ? `${CONFIG.NETWORK_NAME} · ${chainId}`
-    : `Wrong network · Chain ${chainId}`;
-  netEl.textContent = "\u25cf " + networkLabel;
-  netEl.className = networkMatches ? "network-tag ok" : "network-tag bad";
-}
-
-function renderWalletButton(isConnected) {
-  const connectBtn = document.getElementById("connectBtn");
-  if (!connectBtn || connectBtn.disabled) return;
-  connectBtn.textContent = isConnected
-    ? "Disconnect"
-    : (connectBtn.dataset.connectLabel || "Connect Wallet");
-}
-
-function updateTopbar() {
-  const walletState = state.walletSession ? state.walletSession.state : null;
-  const address = walletState ? walletState.address : state.account;
-  const chainId = walletState ? walletState.chainId : state.chainId;
-  const isConnected = !!(walletState ? walletState.isConnected : address);
-
-  renderWalletAddress(address, isConnected);
-  renderWalletStatus(isConnected);
-  renderNetworkStatus(chainId, isConnected);
-  renderWalletButton(isConnected);
-}
-
-/**
- * Wires the standard topbar "Connect Wallet" button (id="connectBtn").
- * After a successful connection it calls the page-specific hook
- * onWalletConnected() when that function is defined.
- */
-function setupTopbar() {
-  const btn = document.getElementById("connectBtn");
-  updateTopbar();
-  if (!btn) return;
-
-  btn.addEventListener("click", async () => {
-    hideBanner();
-    const connected = !!state.walletSession?.state.isConnected;
-
-    if (connected) {
-      await state.walletSession.disconnectWallet();
-      return;
-    }
-
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Connecting…';
-    try {
-      await connectWallet();
-    } catch (err) {
-      showBanner("⚠️ " + errorMessage(err));
-    } finally {
-      btn.disabled = false;
-      updateTopbar();
-    }
-  });
-}
+function updateTopbar() { onWalletState(state.walletSession?.state); }
 
 async function initWalletSession() {
   const session = createWalletSession();
@@ -378,7 +285,7 @@ const CANONICAL_FIELD_ORDER = new Set([
   "certificateId",
 ]);
 
-function isMissingRequiredField(value) {
+function isMissingRequiredField(value) { // NOSONAR -- Canonicalization helpers form one private client unit.
   return !value || (typeof value === "string" && value.trim() === "");
 }
 
@@ -390,7 +297,7 @@ function validateRequiredCertificateFields(data) {
   }
 }
 
-function normalizeCertificateValue(value) {
+function normalizeCertificateValue(value) { // NOSONAR -- Canonicalization helpers form one private client unit.
   return typeof value === "string" ? value.trim() : value;
 }
 
@@ -405,7 +312,11 @@ function appendCanonicalFields(data, clean) {
 function appendExtraFields(data, clean) {
   const extraEntries = Object.entries(data)
     .filter(([key, value]) => !CANONICAL_FIELD_ORDER.has(key) && value !== null && value !== undefined)
-    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
+    .sort(([left], [right]) => {
+      if (left < right) return -1;
+      if (left > right) return 1;
+      return 0;
+    });
 
   for (const [key, value] of extraEntries) {
     clean[key] = normalizeCertificateValue(value);
@@ -438,15 +349,15 @@ function computeCertificateHash(data) {
 /**
  * Constructs verification URL for a given hash.
  */
-function getVerificationUrl(hash) {
+function getVerificationUrl(hash) { // NOSONAR -- URL generation is part of the client instance API.
   const origin = window.location.origin || "";
-  const pathname = window.location.pathname.replace(/\/[^/]*$/, "/verifier.html");
+  const pathname = "/verify";
   return `${origin}${pathname}?hash=${encodeURIComponent(hash)}`;
 }
 
-function getCertificateVerificationUrl(certificateId) {
+function getCertificateVerificationUrl(certificateId) { // NOSONAR -- URL generation is part of the client instance API.
   const origin = window.location.origin || "";
-  const pathname = window.location.pathname.replace(/\/[^/]*$/, "/verifier.html");
+  const pathname = "/verify";
   return `${origin}${pathname}?id=${encodeURIComponent(certificateId)}`;
 }
 
@@ -454,7 +365,7 @@ function getCertificateVerificationUrl(certificateId) {
  * Renders a QR code onto an HTML canvas element.
  */
 async function renderQrCode(canvasEl, text, options = {}) {
-  if (!window.QRCode) {
+  if (!QRCode) {
     console.error("QRCode library not loaded");
     return;
   }
@@ -468,7 +379,7 @@ async function renderQrCode(canvasEl, text, options = {}) {
     errorCorrectionLevel: "M",
   };
   return new Promise((resolve, reject) => {
-    window.QRCode.toCanvas(canvasEl, text, opts, (err) => {
+    QRCode.toCanvas(canvasEl, text, opts, (err) => {
       if (err) reject(err);
       else resolve(canvasEl);
     });
@@ -478,7 +389,7 @@ async function renderQrCode(canvasEl, text, options = {}) {
 /**
  * Fetches all certificates from off-chain store.
  */
-async function fetchOffchainCertificates() {
+async function fetchOffchainCertificates() { // NOSONAR -- Storage access is exposed through the client instance API.
   try {
     const res = await fetch("/data/certificates.json", { cache: "no-store" });
     if (!res.ok) return {};
@@ -506,7 +417,7 @@ async function fetchOffchainCertificate(hash) {
 /**
  * Saves a certificate record to the off-chain store via server API.
  */
-async function storeCertificateOffchain(hash, data, txInfo = {}, recordInfo = {}) {
+async function storeCertificateOffchain(hash, data, txInfo = {}, recordInfo = {}) { // NOSONAR -- Storage access is exposed through the client instance API.
   try {
     const res = await fetch("/api/store-certificate", {
       method: "POST",
@@ -523,7 +434,7 @@ async function storeCertificateOffchain(hash, data, txInfo = {}, recordInfo = {}
   }
 }
 
-async function updateCertificateStatusOffchain(hash, status, txInfo = {}) {
+async function updateCertificateStatusOffchain(hash, status, txInfo = {}) { // NOSONAR -- Storage access is exposed through the client instance API.
   const response = await fetch("/api/update-certificate-status", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -540,7 +451,7 @@ async function updateCertificateStatusOffchain(hash, status, txInfo = {}) {
  * Decodes a QR code from an Image / Canvas / File using jsQR.
  */
 async function decodeQrFromImage(imageSource) {
-  if (!window.jsQR) {
+  if (!jsQR) {
     throw new Error("QR scanner engine (jsQR) is not loaded");
   }
 
@@ -571,12 +482,12 @@ async function decodeQrFromImage(imageSource) {
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
+  const code = jsQR(imageData.data, imageData.width, imageData.height, {
     inversionAttempts: "dontInvert",
   });
 
   if (!code?.data) {
-    const codeInverted = window.jsQR(imageData.data, imageData.width, imageData.height, {
+    const codeInverted = jsQR(imageData.data, imageData.width, imageData.height, {
       inversionAttempts: "onlyInvert",
     });
     if (codeInverted?.data) return codeInverted.data;
@@ -589,7 +500,7 @@ async function decodeQrFromImage(imageSource) {
 /**
  * Extracts certificate hash from decoded QR string (handles URLs or direct hashes).
  */
-function extractHashFromQr(decodedText) {
+function extractHashFromQr(decodedText) { // NOSONAR -- QR parsing is exposed through the client instance API.
   if (!decodedText) return null;
   const trimmed = decodedText.trim();
   const queryStart = trimmed.indexOf("?");
@@ -611,3 +522,7 @@ function extractHashFromQr(decodedText) {
 
   return trimmed;
 }
+
+return { state, hooks, CONFIG, connectWallet, syncWalletState, createWalletSession, ensureCorrectNetwork, createReadonlyContract, getContract, toBytes32, statusLabel, formatTimestamp, shorten, errorMessage, parseMetadata, escapeHtml, showBanner, hideBanner, updateTopbar, initWalletSession, isMissingRequiredField, validateRequiredCertificateFields, normalizeCertificateValue, appendCanonicalFields, appendExtraFields, canonicalizeCertificate, computeCertificateHash, getVerificationUrl, getCertificateVerificationUrl, renderQrCode, fetchOffchainCertificates, fetchOffchainCertificate, storeCertificateOffchain, updateCertificateStatusOffchain, decodeQrFromImage, extractHashFromQr };
+}
+module.exports = { createCertificateClient };

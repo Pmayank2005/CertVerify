@@ -1,9 +1,48 @@
+/** Route-scoped certificate workflows used by the Angular issuer component. */
+function dataUrlToBytes(dataUrl) {
+  const base64 = dataUrl.split(",")[1];
+  const binary = atob(base64);
+  return Uint8Array.from(binary, (character) => character.codePointAt(0));
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read the selected template image."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function offchainRecordForHash(records, hash) {
+  return Object.entries(records).find(([key]) => key.toLowerCase() === hash.toLowerCase())?.[1] || null;
+}
+
+function managementStatus(status) {
+  if (status === "valid") return { text: "Valid", css: "status-valid" };
+  if (status === "revoked") return { text: "Revoked", css: "status-revoked" };
+  return { text: "Unregistered", css: "status-notfound" };
+}
+
+function managementIssueDate(value, fallback) {
+  const dateValue = value || fallback;
+  if (!dateValue) return "—";
+  const numericValue = Number(dateValue);
+  if (Number.isFinite(numericValue) && numericValue > 0) return new Date(numericValue * 1000).toLocaleString();
+  const date = new Date(dateValue);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
+}
+
+function createIssuerController(client, scope, libraries) {
+const { state, CONFIG, createReadonlyContract, toBytes32, shorten, errorMessage, parseMetadata, escapeHtml, showBanner, hideBanner, updateTopbar, computeCertificateHash, getVerificationUrl, getCertificateVerificationUrl, renderQrCode, fetchOffchainCertificates, storeCertificateOffchain, updateCertificateStatusOffchain } = client;
+const ensureCorrectNetwork = async () => { scope.assertActive(); await client.ensureCorrectNetwork(); scope.assertActive(); };
+const { ethers, CertificateWorkflows, PDFLib, JSZip } = libraries;
 /**
  * Issuer dashboard logic — issue / revoke certificates and show contract state.
- * Loaded by issuer.html after app.js.
+ * Instantiated by CertificateWorkflowService after Angular renders the page.
  */
 
-const $ = (id) => document.getElementById(id);
+const $ = scope.get;
 let pendingPdfIssue = null;
 let pdfPreviewUrl = null;
 let pendingRawIssue = null;
@@ -153,12 +192,6 @@ async function preparePdfReview() {
   }
 }
 
-function dataUrlToBytes(dataUrl) {
-  const base64 = dataUrl.split(",")[1];
-  const binary = atob(base64);
-  return Uint8Array.from(binary, (character) => character.codePointAt(0));
-}
-
 async function issueUploadedPdf() {
   const pending = pendingPdfIssue;
   if (!pending) {
@@ -191,6 +224,7 @@ async function issueUploadedPdf() {
       documentHash: pending.hash,
       metadataHash: computeCertificateHash(pending.data),
     });
+    scope.assertActive();
     const tx = await state.signerContract.issueCertificate(pending.hash, contractMetadata);
     setPdfReviewMessage(`Transaction ${shorten(tx.hash, 10, 8)} submitted. Waiting for blockchain confirmation…`);
     const receipt = await tx.wait();
@@ -243,7 +277,7 @@ async function issueUploadedPdf() {
       });
       $("downloadIssuedPdf").addEventListener("click", () => {
         const anchor = document.createElement("a");
-        anchor.href = URL.createObjectURL(pending.file);
+        anchor.href = scope.createObjectURL(pending.file);
         anchor.download = pending.file.name;
         anchor.click();
       });
@@ -282,8 +316,8 @@ function setupPdfIssuance() {
     if (!file) return;
     try {
       CertificateWorkflows.validatePdfFile(file, new Uint8Array(await file.slice(0, 5).arrayBuffer()));
-      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
-      pdfPreviewUrl = URL.createObjectURL(file);
+      if (pdfPreviewUrl) scope.revokeObjectURL(pdfPreviewUrl);
+      pdfPreviewUrl = scope.createObjectURL(file);
       $("pdfPreview").src = pdfPreviewUrl;
       $("pdfPreview").hidden = false;
       $("pdfFileDetails").textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB · PDF`;
@@ -294,11 +328,9 @@ function setupPdfIssuance() {
       setPdfReviewMessage(errorMessage(err), true);
     }
   });
-  $("preparePdfReviewBtn").addEventListener("click", preparePdfReview);
   $("confirmPdfIssue").addEventListener("change", (event) => {
     $("issuePdfBtn").disabled = !event.target.checked;
   });
-  $("issuePdfBtn").addEventListener("click", issueUploadedPdf);
 }
 
 function rawCertificateData() {
@@ -381,15 +413,6 @@ function setDesignerControlsFromTemplate(template) {
   $("templateQrY").value = Math.round((template.qr?.y ?? 0.045) * 100);
   $("templateBackgroundOpacity").value = Math.round((template.backgroundOpacity ?? 0.82) * 100);
   $("templateSignatureEnabled").checked = !!template.signature;
-}
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Could not read the selected template image."));
-    reader.readAsDataURL(file);
-  });
 }
 
 async function saveCustomTemplate() {
@@ -489,8 +512,8 @@ async function generateRawPreview() {
     }
     pendingRawIssue = { data, certificateId, templateId, verificationUrl, qr, pdfBytes, documentHash,
       generation: { verificationUrl, template: templateOptions.template || null } };
-    if (rawPreviewUrl) URL.revokeObjectURL(rawPreviewUrl);
-    rawPreviewUrl = URL.createObjectURL(new Blob([pdfBytes], { type: "application/pdf" }));
+    if (rawPreviewUrl) scope.revokeObjectURL(rawPreviewUrl);
+    rawPreviewUrl = scope.createObjectURL(new Blob([pdfBytes], { type: "application/pdf" }));
     $("rawCertificatePreview").src = rawPreviewUrl;
     $("rawCertificatePreview").hidden = false;
     $("rawReviewSummary").innerHTML = `
@@ -548,6 +571,7 @@ async function issueGeneratedCertificate() {
       templateId: pending.templateId,
       metadataHash: computeCertificateHash(pending.data),
     });
+    scope.assertActive();
     const tx = await state.signerContract.issueCertificate(pending.documentHash, contractMetadata);
     const result = $("rawIssueResult");
     result.className = "result show";
@@ -569,7 +593,7 @@ async function issueGeneratedCertificate() {
       generation: pending.generation,
     });
 
-    const pdfBlobUrl = URL.createObjectURL(new Blob([pending.pdfBytes], { type: "application/pdf" }));
+    const pdfBlobUrl = scope.createObjectURL(new Blob([pending.pdfBytes], { type: "application/pdf" }));
     result.innerHTML = `
       <span class="badge status-valid">Certificate issued</span>
       <table class="kv">
@@ -620,7 +644,7 @@ function invalidateBulkGeneration() {
   $("confirmBulkIssue").disabled = true;
   $("issueBulkBtn").disabled = true;
   $("bulkCertificatePreview").hidden = true;
-  if (bulkPreviewUrl) URL.revokeObjectURL(bulkPreviewUrl);
+  if (bulkPreviewUrl) scope.revokeObjectURL(bulkPreviewUrl);
   bulkPreviewUrl = null;
 }
 
@@ -716,7 +740,7 @@ function validateBulkCsvRows() {
   $("bulkIssueResult").className = "result";
 }
 
-async function generateBulkCertificates() {
+async function generateBulkCertificates() { // NOSONAR -- The workflow keeps validation, generation and UI state changes atomic.
   const validRows = bulkValidatedRows.filter((row) => row.valid);
   if (validRows.length === 0) return;
   const button = $("generateBulkCertificatesBtn");
@@ -744,12 +768,12 @@ async function generateBulkCertificates() {
         const templateId = $("bulkTemplateId").value;
         const templateOptions = getTemplateGenerationOptions(templateId);
         const verificationUrl = getCertificateVerificationUrl(certificateId);
-        const qr = await createQrAsset(verificationUrl);
-        const pdfBytes = await CertificateWorkflows.generateCertificatePdf(data, {
+        const qr = await createQrAsset(verificationUrl); // NOSONAR -- Rows are generated sequentially to limit browser memory use.
+        const pdfBytes = await CertificateWorkflows.generateCertificatePdf(data, { // NOSONAR -- See sequential generation rationale above.
           ...templateOptions, qrPngBytes: qr.bytes, verificationUrl, PDFLib,
         });
-        const documentHash = await CertificateWorkflows.hashPdfBytes(pdfBytes);
-        const chainStatus = await contract.getCertificateStatus(documentHash);
+        const documentHash = await CertificateWorkflows.hashPdfBytes(pdfBytes); // NOSONAR -- See sequential generation rationale above.
+        const chainStatus = await contract.getCertificateStatus(documentHash); // NOSONAR -- Avoid bursting the local RPC endpoint.
         CertificateWorkflows.assertUniqueCertificateHash(documentHash, chainStatus, existingRecords);
         if (revision !== bulkGenerationRevision) throw new Error("Bulk inputs changed. Generate certificates again.");
         bulkGeneratedCertificates.push({
@@ -765,9 +789,9 @@ async function generateBulkCertificates() {
 
     const ready = bulkGeneratedCertificates.filter((item) => item.status === "ready");
     const failed = bulkGeneratedCertificates.length - ready.length;
-    if (bulkPreviewUrl) URL.revokeObjectURL(bulkPreviewUrl);
+    if (bulkPreviewUrl) scope.revokeObjectURL(bulkPreviewUrl);
     if (ready.length > 0) {
-      bulkPreviewUrl = URL.createObjectURL(new Blob([ready[0].pdfBytes], { type: "application/pdf" }));
+      bulkPreviewUrl = scope.createObjectURL(new Blob([ready[0].pdfBytes], { type: "application/pdf" }));
       $("bulkCertificatePreview").src = bulkPreviewUrl;
       $("bulkCertificatePreview").hidden = false;
     } else {
@@ -793,12 +817,12 @@ async function downloadBulkZip() {
   if (downloadable.length === 0) return;
   try {
     const blob = await CertificateWorkflows.createPdfArchive(downloadable, JSZip, "blob");
-    const url = URL.createObjectURL(blob);
+    const url = scope.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = "certverify-certificates.zip";
     anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    scope.setTimeout(() => scope.revokeObjectURL(url), 60000);
   } catch (err) {
     $("bulkIssueResult").className = "result show error";
     $("bulkIssueResult").textContent = `Could not create ZIP: ${errorMessage(err)}`;
@@ -836,9 +860,11 @@ async function issueBulkCertificates() {
           templateId: certificate.templateId,
           metadataHash: computeCertificateHash(certificate.data),
         });
-        const tx = await state.signerContract.issueCertificate(certificate.documentHash, metadata);
-        const receipt = await tx.wait();
-        const record = await storeCertificateOffchain(certificate.documentHash, certificate.data, {
+        scope.assertActive();
+        // Transactions must remain sequential for MetaMask confirmation order and account nonces.
+        const tx = await state.signerContract.issueCertificate(certificate.documentHash, metadata); // NOSONAR
+        const receipt = await tx.wait(); // NOSONAR
+        const record = await storeCertificateOffchain(certificate.documentHash, certificate.data, { // NOSONAR
           txHash: receipt.transactionHash,
           blockNumber: receipt.blockNumber,
           contractAddress: CONFIG.CONTRACT_ADDRESS,
@@ -889,7 +915,7 @@ function setupRawIssuance() {
     pendingRawIssue = null;
     $("rawReview").hidden = true;
     $("rawIssueResult").className = "result";
-    if (rawPreviewUrl) URL.revokeObjectURL(rawPreviewUrl);
+    if (rawPreviewUrl) scope.revokeObjectURL(rawPreviewUrl);
     $("rawCertificatePreview").hidden = true;
   };
   for (const fieldId of ["rawTemplateId", "rawCertificateTitle", "rawStudentName", "rawCourse", "rawInstitution", "rawIssueDate", "rawIssuerName", "rawGrade"]) {
@@ -908,34 +934,21 @@ function setupRawIssuance() {
       $(id).dispatchEvent(new Event("change", { bubbles: true }));
     }
   });
-  $("generateRawPreviewBtn").addEventListener("click", generateRawPreview);
   $("confirmRawIssue").addEventListener("change", (event) => {
     $("issueRawBtn").disabled = !event.target.checked;
   });
-  $("issueRawBtn").addEventListener("click", issueGeneratedCertificate);
   for (const input of ["bulkTemplateId", "rawCertificateTitle", "rawIssuerName"]) {
     $(input).addEventListener("input", invalidateBulkGeneration);
     $(input).addEventListener("change", invalidateBulkGeneration);
   }
-  for (const modeButton of document.querySelectorAll("[data-raw-mode]")) {
-    modeButton.addEventListener("click", () => {
-      const selectedMode = modeButton.dataset.rawMode;
-      for (const candidate of document.querySelectorAll("[data-raw-mode]")) {
-        candidate.setAttribute("aria-pressed", String(candidate === modeButton));
-      }
-      $("singleStudentMode").hidden = selectedMode !== "single";
-      $("bulkStudentsMode").hidden = selectedMode !== "bulk";
+  $("bulkCsvInput").addEventListener("change", (event) => {
+    loadBulkCsv(event.target.files?.[0]).catch((error) => {
+      $("bulkValidationSummary").textContent = errorMessage(error);
     });
-  }
-  $("bulkCsvInput").addEventListener("change", (event) => loadBulkCsv(event.target.files?.[0]));
-  $("validateBulkRowsBtn").addEventListener("click", validateBulkCsvRows);
-  $("generateBulkCertificatesBtn").addEventListener("click", generateBulkCertificates);
-  $("downloadBulkZipBtn").addEventListener("click", downloadBulkZip);
+  });
   $("confirmBulkIssue").addEventListener("change", (event) => {
     $("issueBulkBtn").disabled = !event.target.checked;
   });
-  $("issueBulkBtn").addEventListener("click", issueBulkCertificates);
-  $("saveCustomTemplateBtn").addEventListener("click", saveCustomTemplate);
   $("removeCustomTemplateBtn").addEventListener("click", () => {
     const selectedId = $("rawTemplateId").value;
     if (!savedCustomTemplates.some((template) => template.id === selectedId)) {
@@ -1001,6 +1014,7 @@ async function issueCertificate() {
 
   try {
     await ensureCorrectNetwork();
+    scope.assertActive();
     const tx = await state.signerContract.issueCertificate(hash, metadata);
     resultEl.className = "result show";
     resultEl.innerHTML =
@@ -1065,7 +1079,7 @@ async function issueCertificate() {
       try {
         await navigator.clipboard.writeText(verifyUrl);
         e.target.textContent = "✓ Link Copied!";
-        setTimeout(() => { e.target.textContent = "📋 Copy Verification Link"; }, 2000);
+        scope.setTimeout(() => { e.target.textContent = "📋 Copy Verification Link"; }, 2000);
       } catch (err) {
         // Clipboard access can be denied; show the URL so the issuer can copy it manually.
         console.warn("[issuer] Could not copy verification link:", err);
@@ -1100,10 +1114,6 @@ function prefillExample() {
   );
 }
 
-function offchainRecordForHash(records, hash) {
-  return Object.entries(records).find(([key]) => key.toLowerCase() === hash.toLowerCase())?.[1] || null;
-}
-
 function certificateIdFor(record) {
   return record.certificateId || record.data?.certificateId || shorten(record.hash, 8, 6);
 }
@@ -1112,21 +1122,6 @@ function certificateVerificationUrl(record) {
   return record.certificateId || record.data?.certificateId
     ? getCertificateVerificationUrl(certificateIdFor(record))
     : getVerificationUrl(record.hash);
-}
-
-function managementStatus(status) {
-  if (status === "valid") return { text: "Valid", css: "status-valid" };
-  if (status === "revoked") return { text: "Revoked", css: "status-revoked" };
-  return { text: "Unregistered", css: "status-notfound" };
-}
-
-function managementIssueDate(value, fallback) {
-  const dateValue = value || fallback;
-  if (!dateValue) return "—";
-  const numericValue = Number(dateValue);
-  if (Number.isFinite(numericValue) && numericValue > 0) return formatTimestamp(numericValue);
-  const date = new Date(dateValue);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
 }
 
 async function loadIssuedCertificates() {
@@ -1145,8 +1140,8 @@ async function loadIssuedCertificates() {
     const seenHashes = new Set();
 
     for (let index = 0; index < total; index += 1) {
-      const hash = await contract.getIssuedHashByIndex(index);
-      const [statusValue, onchainCertificate] = await Promise.all([
+      const hash = await contract.getIssuedHashByIndex(index); // NOSONAR -- Enumeration is sequential to avoid flooding the configured RPC.
+      const [statusValue, onchainCertificate] = await Promise.all([ // NOSONAR -- See RPC throttling rationale above.
         contract.getCertificateStatus(hash),
         contract.getCertificate(hash),
       ]);
@@ -1263,12 +1258,12 @@ async function showCertificateDetails(record, showQr = false) {
 }
 
 function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
+  const url = scope.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
   anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  scope.setTimeout(() => scope.revokeObjectURL(url), 60000);
 }
 
 async function downloadManagedCertificate(record) {
@@ -1307,7 +1302,7 @@ async function downloadManagedCertificate(record) {
   }
 }
 
-function handleCertificateTableAction(event) {
+async function handleCertificateTableAction(event) {
   const button = event.target.closest("[data-cert-action]");
   if (!button) return;
   const record = issuedCertificateRecords.find((item) => item.hash.toLowerCase() === button.dataset.certHash.toLowerCase());
@@ -1319,12 +1314,12 @@ function handleCertificateTableAction(event) {
     return;
   }
   if (action === "revoke") {
-    showCertificateDetails(record).then(() => openRevocationDialog(record));
+    await showCertificateDetails(record);
+    openRevocationDialog(record);
     return;
   }
-  showCertificateDetails(record, action === "qr").then(() => {
-    if (action === "download") downloadManagedCertificate(record);
-  });
+  await showCertificateDetails(record, action === "qr");
+  if (action === "download") await downloadManagedCertificate(record);
 }
 
 function openRevocationDialog(record) {
@@ -1354,6 +1349,7 @@ async function confirmCertificateRevocation() {
     const currentStatus = Number(await state.signerContract.getCertificateStatus(record.hash));
     if (currentStatus !== 1) throw new Error("This certificate is no longer valid on-chain.");
 
+    scope.assertActive();
     const tx = await state.signerContract.revokeCertificate(record.hash);
     const receipt = await tx.wait();
     let storageWarning = "";
@@ -1385,9 +1381,17 @@ async function confirmCertificateRevocation() {
 }
 
 function setupCertificateManagement() {
-  $("issuedCertificatesBody").addEventListener("click", handleCertificateTableAction);
+  $("issuedCertificatesBody").addEventListener("click", (event) => {
+    handleCertificateTableAction(event).catch((error) => {
+      $("certificateDetailsMessage").textContent = errorMessage(error);
+    });
+  });
   $("certificateDetailsDownload").addEventListener("click", () => {
-    if (selectedCertificateRecord) downloadManagedCertificate(selectedCertificateRecord);
+    if (selectedCertificateRecord) {
+      downloadManagedCertificate(selectedCertificateRecord).catch((error) => {
+        $("certificateDetailsMessage").textContent = errorMessage(error);
+      });
+    }
   });
   $("certificateDetailsRevoke").addEventListener("click", () => {
     if (selectedCertificateRecord) openRevocationDialog(selectedCertificateRecord);
@@ -1396,12 +1400,11 @@ function setupCertificateManagement() {
     $("certificateDetails").hidden = true;
     selectedCertificateRecord = null;
   });
-  $("refreshCertificatesBtn").addEventListener("click", loadIssuedCertificates);
   $("certificateSearch").addEventListener("input", renderIssuedCertificates);
-  for (const button of document.querySelectorAll("[data-certificate-filter]")) {
+  for (const button of scope.queryAll("[data-certificate-filter]")) {
     button.addEventListener("click", () => {
       certificateStatusFilter = button.dataset.certificateFilter;
-      for (const filterButton of document.querySelectorAll("[data-certificate-filter]")) {
+      for (const filterButton of scope.queryAll("[data-certificate-filter]")) {
         filterButton.setAttribute("aria-pressed", String(filterButton === button));
       }
       renderIssuedCertificates();
@@ -1411,56 +1414,27 @@ function setupCertificateManagement() {
     pendingRevocationRecord = null;
     $("revokeConfirmDialog").close();
   });
-  $("confirmRevokeBtn").addEventListener("click", confirmCertificateRevocation);
-  loadIssuedCertificates();
+  loadIssuedCertificates().catch((error) => {
+    $("certificateManagementSummary").textContent = errorMessage(error);
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
 
-function setupIssuanceModes() {
-  const modeButtons = Array.from(document.querySelectorAll("[data-issuance-mode]"));
-  const panels = {
-    pdf: $("pdfIssuancePanel"),
-    raw: $("rawIssuancePanel"),
-  };
-
-  for (const button of modeButtons) {
-    button.addEventListener("click", () => {
-      const selectedMode = button.dataset.issuanceMode;
-      for (const modeButton of modeButtons) {
-        modeButton.setAttribute("aria-pressed", String(modeButton === button));
-      }
-      for (const [mode, panel] of Object.entries(panels)) {
-        panel.hidden = mode !== selectedMode;
-      }
-    });
-  }
-
-  $("openDeveloperTools")?.addEventListener("click", () => {
-    const details = $("developerTools");
-    if (!details) return;
-    details.open = true;
-    details.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 
-window.addEventListener("DOMContentLoaded", async () => {
-  await CONFIG.loadDeployment();
-  await initWalletSession();
-  setupTopbar();
-  setupIssuanceModes();
+
+async function initialize() {
   setupPdfIssuance();
   setupRawIssuance();
-  await loadContractInfo(); // read-only info works without MetaMask
-  await loadIssuerInfo();
   setupCertificateManagement();
+  await Promise.all([loadContractInfo(), loadIssuerInfo()]);
 
-  $("issueBtn").addEventListener("click", issueCertificate);
-  $("prefillBtn").addEventListener("click", prefillExample);
-});
+}
+return { initialize, onWalletConnected, onAccountChanged, loadContractInfo, loadIssuerInfo, pdfIssueData, setPdfReviewMessage, preparePdfReview, dataUrlToBytes, issueUploadedPdf, setupPdfIssuance, rawCertificateData, createQrAsset, loadSavedCustomTemplates, updateTemplateSelectors, renderTemplateGallery, getTemplateGenerationOptions, setDesignerControlsFromTemplate, readFileAsDataUrl, saveCustomTemplate, generateRawPreview, issueGeneratedCertificate, currentBulkMapping, invalidateBulkGeneration, renderBulkColumnMapping, renderBulkCertificateList, loadBulkCsv, validateBulkCsvRows, generateBulkCertificates, downloadBulkZip, issueBulkCertificates, setupRawIssuance, issueCertificate, prefillExample, offchainRecordForHash, certificateIdFor, certificateVerificationUrl, managementStatus, managementIssueDate, loadIssuedCertificates, renderIssuedCertificates, showCertificateDetails, downloadBlob, downloadManagedCertificate, handleCertificateTableAction, openRevocationDialog, confirmCertificateRevocation, setupCertificateManagement };
+}
+module.exports = { createIssuerController };

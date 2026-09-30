@@ -1,9 +1,9 @@
 /**
- * Minimal static file server for the frontend (no dependencies).
+ * Serves the built Angular frontend and the local certificate API.
  *
  * Usage:
- *   npm run dev               # serves ./frontend on http://localhost:8080
- *   node scripts/serve-frontend.js --port 3000 --dir frontend
+ *   npm run dev               # builds/watches Angular on http://localhost:8080
+ *   npm start                 # builds and serves the production application
  *
  * Serving over http:// (instead of opening files directly) allows the pages
  * to fetch deployments/CertificateRegistry-ganache.json so the contract
@@ -22,7 +22,7 @@ const PORT = Number(process.argv.includes("--port") ? process.argv[process.argv.
 const ROOT = path.resolve(
   __dirname,
   "..",
-  process.argv.includes("--dir") ? process.argv[process.argv.indexOf("--dir") + 1] : "frontend"
+  process.argv.includes("--dir") ? process.argv[process.argv.indexOf("--dir") + 1] : "dist/certverify/browser"
 );
 
 const MIME = {
@@ -61,7 +61,9 @@ function readJsonBody(req, res, handle) {
     let payload;
     try {
       payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error();
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        throw new Error("Request body must be a JSON object.");
+      }
     } catch {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "A valid JSON object is required." }));
@@ -76,7 +78,7 @@ function isWithin(root, target) {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer((req, res) => { // NOSONAR -- Central dispatch keeps the API and static-file security checks together.
   if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(req.headers.host || "")) {
     res.writeHead(403);
     res.end("Use localhost or 127.0.0.1 to access this local server.");
@@ -96,7 +98,7 @@ const server = http.createServer((req, res) => {
   let urlPath;
   try {
     urlPath = decodeURIComponent(req.url.split("?")[0]);
-    if (urlPath.includes("\0")) throw new Error();
+    if (urlPath.includes("\0")) throw new Error("URL contains a null byte.");
   } catch {
     res.writeHead(400);
     res.end("Invalid URL");
@@ -194,7 +196,8 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  let filePath = path.normalize(path.join(ROOT, urlPath === "/" ? "index.html" : urlPath));
+  const appRoutes = ["/", "/index.html", "/issuer", "/issuer/", "/verify", "/verify/", "/issuer.html", "/verifier.html"];
+  let filePath = path.normalize(path.join(ROOT, appRoutes.includes(urlPath) ? "index.html" : urlPath));
 
   // Prevent path traversal outside the frontend directory
   if (!isWithin(ROOT, filePath)) {

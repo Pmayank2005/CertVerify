@@ -17,8 +17,8 @@
 
 const { hashCertificate, canonicalize, verifyHash } = require("./lib/hash");
 const store = require("./lib/store");
-const fs = require("fs");
-const path = require("path");
+const fs = require("node:fs");
+const path = require("node:path");
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Sample certificate data (used when no CERT_DATA env var is provided)
@@ -157,7 +157,8 @@ async function main() {
     console.log(`  Course:  ${certData.course}`);
 
     try {
-      const result = await issueCertificate(contract, certData);
+      // Transactions are intentionally sequential so each receipt and nonce is finalized in order.
+      const result = await issueCertificate(contract, certData); // NOSONAR
       if (result) {
         results.push(result);
       }

@@ -1,6 +1,6 @@
 # CertVerify
 
-A local demonstration of blockchain-based academic certificate issuance and verification. The project combines a Solidity registry, a plain HTML/JavaScript frontend, MetaMask signing, and a Node.js server with a JSON certificate store.
+A local demonstration of blockchain-based academic certificate issuance and verification. The project combines a Solidity registry, an Angular 21 frontend, MetaMask signing, and a Node.js server with a JSON certificate store.
 
 Certificates created here are demonstration records, not genuine academic qualifications.
 
@@ -17,11 +17,11 @@ The deployed contract has one authorized issuer. Ganache runs the local developm
 
 ## Requirements
 
-- Node.js 22 and npm for the documented setup.
+- Node.js 22.12+ or 24.x and npm (Angular 21 compatible).
 - Ganache 7, installed separately or launched through `npx` below.
 - MetaMask for issuing and revoking certificates. Read-only verification does not require a wallet.
 
-The browser libraries and certificate artwork are included in `frontend/vendor/` and `frontend/templates/`. There is no frontend build step. Dependency installation and the first Solidity compiler download require internet access.
+Angular bundles the browser dependencies from npm and copies the certificate artwork from `frontend/templates/`. Dependency installation and the first Solidity compiler download require internet access. `npm run dev` builds Angular, watches source changes, and serves the application and API from the same origin.
 
 ## Quick start
 
@@ -102,6 +102,9 @@ Certificate-ID lookup needs the local store. A hash can be checked directly agai
 | `npm run deploy` | Deploy a new registry and save its local deployment record |
 | `npm run dev` | Start the local application server on port 8080 |
 | `npm run dev -- --port 3000` | Start the application on another port |
+| `npm run build` | Compile and validate Angular templates; write production assets to `dist/certverify/browser/` |
+| `npm start` | Build and serve the production application on port 8080 |
+| `npm run test:ui` | Build Angular and run browser regressions (install Chromium once with `npx playwright install chromium`) |
 | `npm run issue` | Issue sample JSON certificates on Ganache |
 | `npm run qr` | Generate QR images for stored certificates |
 | `npm run templates:preview` | Generate sample PDFs under `docs/template-previews/` |
@@ -115,7 +118,10 @@ Certificate-ID lookup needs the local store. A hash can be checked directly agai
 
 ```text
 contracts/                 Solidity certificate registry
-frontend/                  Pages, scripts, styles, browser libraries, artwork
+frontend/src/app/          Angular standalone pages, routes, and injectable services
+frontend/                  Shared certificate workflows, configuration, styles, artwork
+e2e/                       Browser regression tests for the Angular application
+angular.json               Angular build configuration
 scripts/                   Deployment, storage, QR, and validation utilities
 hardhat.config.js          Compiler and Ganache configuration
 package.json               Commands and dependencies
@@ -126,6 +132,8 @@ Consensus_Model.md          Current trust model and proposed consortium design
 ```
 
 Dependencies, secrets, runtime certificate data, deployments, build outputs, tests, original design references, and `docs/` are excluded under the current ignore rules. Runtime template artwork is included separately under `frontend/templates/`.
+
+The frontend uses standalone Angular components and a signal-driven wallet header. Overview, Issuer Portal, and Verify live at `/`, `/issuer`, and `/verify`; existing `.html` URLs and certificate QR query parameters remain supported. `WalletService` owns the shared wallet/contract client, and `CertificateWorkflowService` owns route-scoped PDF, CSV, QR, and issuance controllers. The existing JavaScript processing modules remain reusable; complex generated previews and results still use DOM rendering inside their owning component. Route teardown releases preview URLs, timers, and clipboard listeners. Solidity and the local API are unchanged.
 
 A fresh checkout starts without previous certificates or deployment records. Back up the certificate store, issued PDFs, and matching blockchain state separately if you need to preserve a demo. Restarting Ganache without persistent chain storage removes its contracts and transactions; deploy again and start with matching data rather than assuming old records belong to the new chain.
 
